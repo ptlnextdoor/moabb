@@ -667,24 +667,26 @@ def find_significant_differences(df, perm_cutoff=20):
                 np.fill_diagonal(T, np.nan)
                 if np.isnan(P[~np.eye(n_algs, dtype=bool)]).any():
                     log.info("NaN p-value found, turned to 1")
-                    print("NaN")
                 dfP = pd.DataFrame(index=algs, columns=algs, data=P)
                 dfT = pd.DataFrame(index=algs, columns=algs, data=T)
                 return dfP, dfT
 
     P_full = df.pivot_table(values="p", index=["dataset", "pipe1"], columns="pipe2")
     T_full = df.pivot_table(values="smd", index=["dataset", "pipe1"], columns="pipe2")
+    nsubs_by_dset = pd.Series(nsubs, index=dsets)
     for i in range(n_algs):
         for j in range(n_algs):
             if i != j:
-                p = P_full.loc[(slice(None), algs[i]), algs[j]]
-                t = T_full.loc[(slice(None), algs[i]), algs[j]]
-                P[i, j] = combine_pvalues(p, nsubs)
+                # Pairs missing on some datasets are dropped; weights follow the dataset.
+                p = P_full.loc[(slice(None), algs[i]), algs[j]].dropna()
+                if p.empty:
+                    continue
+                t = T_full.loc[p.index, algs[j]]
+                w = nsubs_by_dset[p.index.get_level_values(0)].to_numpy()
+                P[i, j] = combine_pvalues(p, w)
                 if np.isnan(P[i, j]):
                     log.info("NaN p-value found, turned to 1")
-                    print("NaN")
-                    # P[i, j] = 1.0
-                T[i, j] = combine_effects(t, nsubs)
+                T[i, j] = combine_effects(t, w)
     dfP = pd.DataFrame(index=algs, columns=algs, data=P)
     dfT = pd.DataFrame(index=algs, columns=algs, data=T)
     return dfP, dfT

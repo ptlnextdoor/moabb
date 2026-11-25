@@ -296,6 +296,34 @@ class TestStats:
         assert np.isfinite(dfP.to_numpy(dtype=float)[offdiag]).all(), dfP
         assert np.isfinite(dfT.to_numpy(dtype=float)[offdiag]).all(), dfT
 
+    def test_find_significant_differences_partial_grid(self):
+        # Zeta is listed first but sorts after Alpha; pipeline C only ran on Alpha.
+        rows = []
+        for dset, nsub, pab, pac in (("Zeta", 4, 0.2, None), ("Alpha", 36, 0.01, 0.03)):
+            for p1, p2, p in (
+                ("A", "B", pab),
+                ("B", "A", pab),
+                ("A", "C", pac),
+                ("C", "A", pac),
+            ):
+                if p is not None:
+                    rows.append(
+                        {
+                            "dataset": dset,
+                            "pipe1": p1,
+                            "pipe2": p2,
+                            "p": p,
+                            "smd": 0.5,
+                            "nsub": nsub,
+                        }
+                    )
+        dfP, _ = ma.find_significant_differences(pd.DataFrame(rows))
+        expected = stats.combine_pvalues(
+            [0.2, 0.01], weights=np.sqrt([4, 36]), method="stouffer"
+        )[1]
+        assert dfP.loc["A", "B"] == pytest.approx(expected)
+        assert dfP.loc["A", "C"] == pytest.approx(0.03)
+
 
 class TestCorrectedTtest:
     """Tests for the Nadeau & Bengio corrected resampled t-test."""
